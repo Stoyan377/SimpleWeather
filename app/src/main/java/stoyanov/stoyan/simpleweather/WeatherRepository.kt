@@ -17,8 +17,8 @@ import java.util.concurrent.Executors
 
 object WeatherRepository {
 
-    private const val API_KEY = "48256fe1883d13b6ec7e564c68863ff9"
-    private const val BASE_URL = "https://api.openweathermap.org/data/2.5/weather"
+    private const val GEO_URL = "https://geocoding-api.open-meteo.com/v1/search"
+    private const val FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 
     private val executor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -31,40 +31,39 @@ object WeatherRepository {
     fun fetchWeatherByCity(cityQuery: String, callback: WeatherCallback) {
         executor.execute {
             try {
+                // 1. Geocode City Name to Latitude & Longitude
                 val encodedCity = URLEncoder.encode(cityQuery.trim(), "UTF-8")
-                val urlString = "$BASE_URL?q=$encodedCity&units=metric&appid=$API_KEY"
-                val url = URL(urlString)
+                val geoUrlString = "$GEO_URL?name=$encodedCity&count=1"
+                val geoJson = httpGet(geoUrlString) ?: throw Exception("Geocoding network error")
 
-                val connection = url.openConnection() as HttpURLConnection
-                connection.requestMethod = "GET"
-                connection.connectTimeout = 10000
-                connection.readTimeout = 10000
-
-                val responseCode = connection.responseCode
-                if (responseCode == 200) {
-                    val reader = BufferedReader(InputStreamReader(connection.inputStream))
-                    val stringBuilder = StringBuilder()
-                    var line: String?
-                    while (reader.readLine().also { line = it } != null) {
-                        stringBuilder.append(line)
-                    }
-                    reader.close()
-
-                    val json = JSONObject(stringBuilder.toString())
-                    val weatherData = parseWeatherJson(json)
-
+                val results = geoJson.optJSONArray("results")
+                if (results == null || results.length() == 0) {
                     mainHandler.post {
-                        callback.onSuccess(weatherData)
+                        callback.onError("City '$cityQuery' not found. Please check spelling.")
                     }
-                } else if (responseCode == 404) {
-                    mainHandler.post {
-                        callback.onError("City not found. Please check spelling.")
-                    }
-                } else {
-                    mainHandler.post {
-                        callback.onError("Failed to load weather data (HTTP $responseCode)")
-                    }
+                    return@execute
                 }
+
+                val locationObj = results.getJSONObject(0)
+                val lat = locationObj.getDouble("latitude")
+                val lon = locationObj.getDouble("longitude")
+                val cityName = locationObj.optString("name", cityQuery)
+                val country = locationObj.optString("country", "")
+
+                // 2. Fetch Weather Data from Open-Meteo API
+                val forecastUrlString = "$FORECAST_URL?latitude=$lat&longitude=$lon" +
+                        "&current_weather=true" +
+                        "&hourly=relativehumidity_2m,surface_pressure,apparent_temperature" +
+                        "&daily=sunrise,sunset,temperature_2m_max,temperature_2m_min" +
+                        "&timezone=auto"
+
+                val weatherJson = httpGet(forecastUrlString) ?: throw Exception("Forecast network error")
+                val weatherData = parseOpenMeteoJson(cityName, country, weatherJson)
+
+                mainHandler.post {
+                    callback.onSuccess(weatherData)
+                }
+
             } catch (e: Exception) {
                 Log.e("WeatherRepository", "Error fetching weather", e)
                 mainHandler.post {
@@ -74,47 +73,72 @@ object WeatherRepository {
         }
     }
 
-    private fun parseWeatherJson(json: JSONObject): WeatherData {
-        val weatherArray = json.getJSONArray("weather")
-        val weatherObject = weatherArray.getJSONObject(0)
-        val mainObject = json.getJSONObject("main")
-        val sysObject = json.getJSONObject("sys")
-        val windObject = json.optJSONObject("wind")
+    private fun httpGet(urlString: String): JSONObject? {
+        var connection: HttpURLConnection? = null
+        return try {
+            val url = URL(urlString)
+            connection = url.openConnection() as HttpURLConnection
+            connection.requestMethod = "GET"
+            connection.connectTimeout = 10000
+            connection.readTimeout = 10000
 
-        val weatherId = weatherObject.getInt("id")
-        val rawDescription = weatherObject.getString("description")
-        val capitalizedDescription = rawDescription.replaceFirstChar { 
-            if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() 
+            if (connection.responseCode == 200) {
+                val reader = BufferedReader(InputStreamReader(connection.inputStream))
+                val stringBuilder = StringBuilder()
+                var line: String?
+                while (reader.readLine().also { line = it } != null) {
+                    stringBuilder.append(line)
+                }
+                reader.close()
+                JSONObject(stringBuilder.toString())
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.e("WeatherRepository", "HTTP Request failed for URL: $urlString", e)
+            null
+        } finally {
+            connection?.disconnect()
         }
+    }
 
-        val tempC = mainObject.getDouble("temp")
-        val feelsLikeC = mainObject.optDouble("feels_like", tempC)
-        val tempMinC = mainObject.optDouble("temp_min", tempC)
-        val tempMaxC = mainObject.optDouble("temp_max", tempC)
+    private fun parseOpenMeteoJson(city: String, country: String, json: JSONObject): WeatherData {
+        val currentWeather = json.getJSONObject("current_weather")
+        val tempC = currentWeather.getDouble("temperature")
+        val windKmh = currentWeather.getDouble("windspeed")
+        val windSpeedMs = String.format(Locale.US, "%.1f", windKmh / 3.6).toDouble()
+        val weatherCode = currentWeather.getInt("weathercode")
+        val isDay = currentWeather.optInt("is_day", 1) == 1
 
-        val humidity = mainObject.getInt("humidity")
-        val pressure = mainObject.getInt("pressure")
-        val windSpeed = windObject?.optDouble("speed", 0.0) ?: 0.0
+        val hourly = json.optJSONObject("hourly")
+        val feelsLikeArray = hourly?.optJSONArray("apparent_temperature")
+        val feelsLikeC = if (feelsLikeArray != null && feelsLikeArray.length() > 0) feelsLikeArray.getDouble(0) else tempC
 
-        val cityName = json.getString("name")
-        val country = sysObject.optString("country", "")
+        val humidityArray = hourly?.optJSONArray("relativehumidity_2m")
+        val humidity = if (humidityArray != null && humidityArray.length() > 0) humidityArray.getInt(0) else 50
 
-        val sunriseTime = sysObject.optLong("sunrise", 0L) * 1000
-        val sunsetTime = sysObject.optLong("sunset", 0L) * 1000
-        val currentTime = System.currentTimeMillis()
+        val pressureArray = hourly?.optJSONArray("surface_pressure")
+        val pressure = if (pressureArray != null && pressureArray.length() > 0) pressureArray.getDouble(0).toInt() else 1013
 
-        val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
-        val sunriseStr = if (sunriseTime > 0) timeFormat.format(Date(sunriseTime)) else "--:--"
-        val sunsetStr = if (sunsetTime > 0) timeFormat.format(Date(sunsetTime)) else "--:--"
+        val daily = json.optJSONObject("daily")
+        val tempMaxArray = daily?.optJSONArray("temperature_2m_max")
+        val tempMinArray = daily?.optJSONArray("temperature_2m_min")
+        val tempMaxC = if (tempMaxArray != null && tempMaxArray.length() > 0) tempMaxArray.getDouble(0) else tempC
+        val tempMinC = if (tempMinArray != null && tempMinArray.length() > 0) tempMinArray.getDouble(0) else tempC
+
+        val sunriseArray = daily?.optJSONArray("sunrise")
+        val sunsetArray = daily?.optJSONArray("sunset")
+
+        val sunriseStr = formatIsoTime(sunriseArray?.optString(0))
+        val sunsetStr = formatIsoTime(sunsetArray?.optString(0))
 
         val dateTimeFormat = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
-        val updatedOnStr = dateTimeFormat.format(Date(json.optLong("dt", 0L) * 1000))
+        val updatedOnStr = dateTimeFormat.format(Date())
 
-        val isNight = currentTime < sunriseTime || currentTime >= sunsetTime
-        val condition = determineCondition(weatherId, isNight)
+        val (description, condition) = mapWeatherCode(weatherCode, isDay)
 
         return WeatherData(
-            city = cityName,
+            city = city,
             country = country,
             tempC = tempC,
             feelsLikeC = feelsLikeC,
@@ -122,9 +146,9 @@ object WeatherRepository {
             tempMaxC = tempMaxC,
             humidity = humidity,
             pressure = pressure,
-            windSpeed = windSpeed,
-            description = capitalizedDescription,
-            iconCode = weatherObject.optString("icon", "01d"),
+            windSpeed = windSpeedMs,
+            description = description,
+            iconCode = "",
             condition = condition,
             sunrise = sunriseStr,
             sunset = sunsetStr,
@@ -132,15 +156,37 @@ object WeatherRepository {
         )
     }
 
-    private fun determineCondition(weatherId: Int, isNight: Boolean): WeatherCondition {
-        return when (weatherId) {
-            in 200..232 -> WeatherCondition.THUNDERSTORM
-            in 300..321, in 500..531 -> WeatherCondition.RAIN
-            in 600..622 -> WeatherCondition.SNOW
-            in 701..781 -> WeatherCondition.ATMOSPHERE
-            800 -> if (isNight) WeatherCondition.CLEAR_NIGHT else WeatherCondition.CLEAR_DAY
-            in 801..804 -> WeatherCondition.CLOUDS
-            else -> if (isNight) WeatherCondition.CLEAR_NIGHT else WeatherCondition.CLEAR_DAY
+    private fun formatIsoTime(isoString: String?): String {
+        if (isoString == null || isoString.isEmpty()) return "--:--"
+        return try {
+            val parts = isoString.split("T")
+            if (parts.size > 1) {
+                val timeParts = parts[1].split(":")
+                "${timeParts[0]}:${timeParts[1]}"
+            } else {
+                isoString
+            }
+        } catch (e: Exception) {
+            "--:--"
+        }
+    }
+
+    private fun mapWeatherCode(code: Int, isDay: Boolean): Pair<String, WeatherCondition> {
+        return when (code) {
+            0 -> Pair("Clear sky", if (isDay) WeatherCondition.CLEAR_DAY else WeatherCondition.CLEAR_NIGHT)
+            1 -> Pair("Mainly clear", if (isDay) WeatherCondition.CLEAR_DAY else WeatherCondition.CLEAR_NIGHT)
+            2 -> Pair("Partly cloudy", WeatherCondition.CLOUDS)
+            3 -> Pair("Overcast", WeatherCondition.CLOUDS)
+            45, 48 -> Pair("Foggy", WeatherCondition.ATMOSPHERE)
+            51, 53, 55 -> Pair("Drizzle", WeatherCondition.RAIN)
+            56, 57 -> Pair("Freezing Drizzle", WeatherCondition.SNOW)
+            61, 63, 65 -> Pair("Rain", WeatherCondition.RAIN)
+            66, 67 -> Pair("Freezing Rain", WeatherCondition.SNOW)
+            71, 73, 75, 77 -> Pair("Snow fall", WeatherCondition.SNOW)
+            80, 81, 82 -> Pair("Rain showers", WeatherCondition.RAIN)
+            85, 86 -> Pair("Snow showers", WeatherCondition.SNOW)
+            95, 96, 99 -> Pair("Thunderstorm", WeatherCondition.THUNDERSTORM)
+            else -> Pair("Clear", if (isDay) WeatherCondition.CLEAR_DAY else WeatherCondition.CLEAR_NIGHT)
         }
     }
 }

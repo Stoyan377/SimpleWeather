@@ -164,7 +164,7 @@
                         android:id="@+id/tv_city"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Sofia"
+                        android:text="София"
                         android:textColor="#FFFFFF"
                         android:textSize="26sp"
                         android:textStyle="bold" />
@@ -173,7 +173,7 @@
                         android:id="@+id/tv_country"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Bulgaria"
+                        android:text="България"
                         android:textColor="#D0FFFFFF"
                         android:textSize="14sp" />
                 </LinearLayout>
@@ -219,7 +219,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:text="Clear Sky"
+                android:text="Ясно небе"
                 android:textColor="#F0FFFFFF"
                 android:textSize="18sp" />
 
@@ -229,7 +229,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="Feels like 24.5°C  |  L: 18°  H: 26°"
+                android:text="Усеща се като 24.5°C  |  Мин: 18°  Макс: 26°"
                 android:textColor="#D0FFFFFF"
                 android:textSize="13sp" />
         </LinearLayout>
@@ -262,7 +262,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="💧 Humidity"
+                        android:text="💧 Влажност"
                         android:textColor="#C0FFFFFF"
                         android:textSize="12sp" />
 
@@ -287,7 +287,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="🧭 Pressure"
+                        android:text="🧭 Налягане"
                         android:textColor="#C0FFFFFF"
                         android:textSize="12sp" />
 
@@ -328,7 +328,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="💨 Wind Speed"
+                        android:text="💨 Скорост на вятъра"
                         android:textColor="#C0FFFFFF"
                         android:textSize="12sp" />
 
@@ -353,7 +353,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="🌅 Sunrise / Sunset"
+                        android:text="🌅 Изгрев / Залез"
                         android:textColor="#C0FFFFFF"
                         android:textSize="12sp" />
 
@@ -377,7 +377,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
             android:gravity="center"
-            android:text="Updated: Today 22:45"
+            android:text="Последна актуализация: Днес 22:45"
             android:textColor="#B0FFFFFF"
             android:textSize="12sp" />
 

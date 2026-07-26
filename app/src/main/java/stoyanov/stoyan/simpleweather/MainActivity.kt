@@ -141,13 +141,13 @@ class MainActivity : AppCompatActivity() {
 
         val feelsLikeStr = data.getFeelsLike(isCelsius)
         val minMaxStr = data.getTempMinMax(isCelsius)
-        tvFeelsLikeMinMax.text = "Feels like $feelsLikeStr  |  $minMaxStr"
+        tvFeelsLikeMinMax.text = "Усеща се като $feelsLikeStr  |  $minMaxStr"
 
         tvHumidity.text = "${data.humidity}%"
         tvPressure.text = "${data.pressure} hPa"
         tvWind.text = "${data.windSpeed} m/s"
         tvSunTimes.text = "${data.sunrise} / ${data.sunset}"
-        tvUpdatedTime.text = "Updated: ${data.updatedOn}"
+        tvUpdatedTime.text = "Обновено: ${data.updatedOn}"
 
         btnUnitToggle.text = if (isCelsius) "°C  ➜  °F" else "°F  ➜  °C"
 

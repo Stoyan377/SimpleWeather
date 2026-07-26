@@ -40,7 +40,7 @@ data class WeatherData(
     fun getTempMinMax(isCelsius: Boolean): String {
         val min = if (isCelsius) tempMinC else (tempMinC * 9 / 5) + 32
         val max = if (isCelsius) tempMaxC else (tempMaxC * 9 / 5) + 32
-        return String.format("L: %.0f°  H: %.0f°", min, max)
+        return String.format("Мин: %.0f°  Макс: %.0f°", min, max)
     }
 
     fun getWeatherEmoji(): String {
