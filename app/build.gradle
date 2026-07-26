@@ -2,6 +2,7 @@ apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 
 android {
+    namespace 'stoyanov.stoyan.simpleweather'
     compileSdkVersion 33
 
     defaultConfig {
