@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Просто Време</string>
+    <string name="app_name">Simple Weather</string>
     <string name="search_hint">Търси град по света...</string>
     <string name="btn_search">Търсене</string>
     <string name="unit_celsius">°C</string>

@@ -1,5 +1,7 @@
 package stoyanov.stoyan.simpleweather
 
+import android.content.Context
+import android.location.Geocoder
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -10,7 +12,6 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.text.DateFormat
-import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
@@ -39,7 +40,7 @@ object WeatherRepository {
                 val results = geoJson.optJSONArray("results")
                 if (results == null || results.length() == 0) {
                     mainHandler.post {
-                        callback.onError("City '$cityQuery' not found. Please check spelling.")
+                        callback.onError("Град '$cityQuery' не е намерен. Моля, проверете изписването.")
                     }
                     return@execute
                 }
@@ -51,26 +52,64 @@ object WeatherRepository {
                 val country = locationObj.optString("country", "")
 
                 // 2. Fetch Weather Data from Open-Meteo API
-                val forecastUrlString = "$FORECAST_URL?latitude=$lat&longitude=$lon" +
-                        "&current_weather=true" +
-                        "&hourly=relativehumidity_2m,surface_pressure,apparent_temperature" +
-                        "&daily=sunrise,sunset,temperature_2m_max,temperature_2m_min" +
-                        "&timezone=auto"
-
-                val weatherJson = httpGet(forecastUrlString) ?: throw Exception("Forecast network error")
-                val weatherData = parseOpenMeteoJson(cityName, country, weatherJson)
+                val weatherData = fetchOpenMeteoForecast(lat, lon, cityName, country)
 
                 mainHandler.post {
                     callback.onSuccess(weatherData)
                 }
 
             } catch (e: Exception) {
-                Log.e("WeatherRepository", "Error fetching weather", e)
+                Log.e("WeatherRepository", "Error fetching weather by city", e)
                 mainHandler.post {
-                    callback.onError("Network error. Please check your internet connection.")
+                    callback.onError("Мрежова грешка. Моля, проверете интернет връзката си.")
                 }
             }
         }
+    }
+
+    fun fetchWeatherByCoordinates(context: Context, lat: Double, lon: Double, callback: WeatherCallback) {
+        executor.execute {
+            try {
+                var cityName = "Моето местоположение"
+                var countryName = ""
+
+                try {
+                    val geocoder = Geocoder(context, Locale("bg"))
+                    @Suppress("DEPRECATION")
+                    val addresses = geocoder.getFromLocation(lat, lon, 1)
+                    if (!addresses.isNullOrEmpty()) {
+                        val address = addresses[0]
+                        cityName = address.locality ?: address.subAdminArea ?: address.adminArea ?: "Моето местоположение"
+                        countryName = address.countryName ?: ""
+                    }
+                } catch (e: Exception) {
+                    Log.w("WeatherRepository", "Android Geocoder failed, using fallback coordinates name", e)
+                }
+
+                val weatherData = fetchOpenMeteoForecast(lat, lon, cityName, countryName)
+
+                mainHandler.post {
+                    callback.onSuccess(weatherData)
+                }
+
+            } catch (e: Exception) {
+                Log.e("WeatherRepository", "Error fetching weather by coordinates", e)
+                mainHandler.post {
+                    callback.onError("Грешка при зареждане на времето за текущата локация.")
+                }
+            }
+        }
+    }
+
+    private fun fetchOpenMeteoForecast(lat: Double, lon: Double, cityName: String, country: String): WeatherData {
+        val forecastUrlString = "$FORECAST_URL?latitude=$lat&longitude=$lon" +
+                "&current_weather=true" +
+                "&hourly=relativehumidity_2m,surface_pressure,apparent_temperature" +
+                "&daily=sunrise,sunset,temperature_2m_max,temperature_2m_min" +
+                "&timezone=auto"
+
+        val weatherJson = httpGet(forecastUrlString) ?: throw Exception("Forecast network error")
+        return parseOpenMeteoJson(cityName, country, weatherJson)
     }
 
     private fun httpGet(urlString: String): JSONObject? {
@@ -173,20 +212,20 @@ object WeatherRepository {
 
     private fun mapWeatherCode(code: Int, isDay: Boolean): Pair<String, WeatherCondition> {
         return when (code) {
-            0 -> Pair("Clear sky", if (isDay) WeatherCondition.CLEAR_DAY else WeatherCondition.CLEAR_NIGHT)
-            1 -> Pair("Mainly clear", if (isDay) WeatherCondition.CLEAR_DAY else WeatherCondition.CLEAR_NIGHT)
-            2 -> Pair("Partly cloudy", WeatherCondition.CLOUDS)
-            3 -> Pair("Overcast", WeatherCondition.CLOUDS)
-            45, 48 -> Pair("Foggy", WeatherCondition.ATMOSPHERE)
-            51, 53, 55 -> Pair("Drizzle", WeatherCondition.RAIN)
-            56, 57 -> Pair("Freezing Drizzle", WeatherCondition.SNOW)
-            61, 63, 65 -> Pair("Rain", WeatherCondition.RAIN)
-            66, 67 -> Pair("Freezing Rain", WeatherCondition.SNOW)
-            71, 73, 75, 77 -> Pair("Snow fall", WeatherCondition.SNOW)
-            80, 81, 82 -> Pair("Rain showers", WeatherCondition.RAIN)
-            85, 86 -> Pair("Snow showers", WeatherCondition.SNOW)
-            95, 96, 99 -> Pair("Thunderstorm", WeatherCondition.THUNDERSTORM)
-            else -> Pair("Clear", if (isDay) WeatherCondition.CLEAR_DAY else WeatherCondition.CLEAR_NIGHT)
+            0 -> Pair("Ясно небе", if (isDay) WeatherCondition.CLEAR_DAY else WeatherCondition.CLEAR_NIGHT)
+            1 -> Pair("Предимно ясно", if (isDay) WeatherCondition.CLEAR_DAY else WeatherCondition.CLEAR_NIGHT)
+            2 -> Pair("Частична облачност", WeatherCondition.CLOUDS)
+            3 -> Pair("Значителна облачност", WeatherCondition.CLOUDS)
+            45, 48 -> Pair("Мъгла", WeatherCondition.ATMOSPHERE)
+            51, 53, 55 -> Pair("Лек ръмеж", WeatherCondition.RAIN)
+            56, 57 -> Pair("Леден ръмеж", WeatherCondition.SNOW)
+            61, 63, 65 -> Pair("Дъжд", WeatherCondition.RAIN)
+            66, 67 -> Pair("Замръзващ дъжд", WeatherCondition.SNOW)
+            71, 73, 75, 77 -> Pair("Снеговалеж", WeatherCondition.SNOW)
+            80, 81, 82 -> Pair("Краткотраен дъжд", WeatherCondition.RAIN)
+            85, 86 -> Pair("Краткотраен сняг", WeatherCondition.SNOW)
+            95, 96, 99 -> Pair("Гръмотевична буря", WeatherCondition.THUNDERSTORM)
+            else -> Pair("Ясно", if (isDay) WeatherCondition.CLEAR_DAY else WeatherCondition.CLEAR_NIGHT)
         }
     }
 }

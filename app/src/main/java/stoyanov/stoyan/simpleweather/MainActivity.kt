@@ -1,6 +1,13 @@
 package stoyanov.stoyan.simpleweather
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
 import android.os.Bundle
+import android.os.Looper
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
@@ -10,8 +17,14 @@ import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 
 class MainActivity : AppCompatActivity() {
+
+    companion object {
+        private const val LOCATION_PERMISSION_REQUEST_CODE = 1001
+    }
 
     private lateinit var rootLayout: ScrollView
     private lateinit var etSearchCity: EditText
@@ -49,8 +62,8 @@ class MainActivity : AppCompatActivity() {
         initViews()
         setupListeners()
 
-        // Load default city on app launch
-        loadWeather("Sofia")
+        // Check GPS location or fallback to Sofia
+        checkLocationAndLoadWeather()
     }
 
     private fun initViews() {
@@ -102,6 +115,107 @@ class MainActivity : AppCompatActivity() {
         btnUnitToggle.setOnClickListener {
             isCelsius = !isCelsius
             currentWeatherData?.let { renderWeatherUI(it) }
+        }
+    }
+
+    private fun checkLocationAndLoadWeather() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            loadDeviceLocationWeather()
+        } else {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
+                LOCATION_PERMISSION_REQUEST_CODE
+            )
+        }
+    }
+
+    private fun loadDeviceLocationWeather() {
+        progressBar.visibility = View.VISIBLE
+        tvError.visibility = View.GONE
+
+        try {
+            val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            var location: Location? = null
+
+            if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+            }
+            if (location == null && locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                location = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+            }
+
+            if (location != null) {
+                WeatherRepository.fetchWeatherByCoordinates(
+                    this,
+                    location.latitude,
+                    location.longitude,
+                    object : WeatherRepository.WeatherCallback {
+                        override fun onSuccess(data: WeatherData) {
+                            progressBar.visibility = View.GONE
+                            currentWeatherData = data
+                            renderWeatherUI(data)
+                        }
+
+                        override fun onError(errorMessage: String) {
+                            // Fallback to default city if location weather fetch fails
+                            loadWeather("Sofia")
+                        }
+                    }
+                )
+            } else {
+                // Request a single location update if lastKnownLocation was null
+                val locationListener = object : LocationListener {
+                    override fun onLocationChanged(loc: Location) {
+                        locationManager.removeUpdates(this)
+                        WeatherRepository.fetchWeatherByCoordinates(
+                            this@MainActivity,
+                            loc.latitude,
+                            loc.longitude,
+                            object : WeatherRepository.WeatherCallback {
+                                override fun onSuccess(data: WeatherData) {
+                                    progressBar.visibility = View.GONE
+                                    currentWeatherData = data
+                                    renderWeatherUI(data)
+                                }
+
+                                override fun onError(errorMessage: String) {
+                                    loadWeather("Sofia")
+                                }
+                            }
+                        )
+                    }
+                    @Deprecated("Deprecated in Java")
+                    override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+                    override fun onProviderEnabled(provider: String) {}
+                    override fun onProviderDisabled(provider: String) {}
+                }
+
+                if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                    locationManager.requestSingleUpdate(LocationManager.NETWORK_PROVIDER, locationListener, Looper.getMainLooper())
+                } else if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                    locationManager.requestSingleUpdate(LocationManager.GPS_PROVIDER, locationListener, Looper.getMainLooper())
+                } else {
+                    loadWeather("Sofia")
+                }
+            }
+        } catch (e: SecurityException) {
+            loadWeather("Sofia")
+        } catch (e: Exception) {
+            loadWeather("Sofia")
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                loadDeviceLocationWeather()
+            } else {
+                // Permission denied, fallback to default city
+                loadWeather("Sofia")
+            }
         }
     }
 
