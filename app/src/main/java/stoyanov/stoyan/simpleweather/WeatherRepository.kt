@@ -32,9 +32,9 @@ object WeatherRepository {
     fun fetchWeatherByCity(cityQuery: String, callback: WeatherCallback) {
         executor.execute {
             try {
-                // 1. Geocode City Name to Latitude & Longitude
+                // 1. Geocode City Name to Latitude & Longitude with Bulgarian language support
                 val encodedCity = URLEncoder.encode(cityQuery.trim(), "UTF-8")
-                val geoUrlString = "$GEO_URL?name=$encodedCity&count=1"
+                val geoUrlString = "$GEO_URL?name=$encodedCity&count=1&language=bg"
                 val geoJson = httpGet(geoUrlString) ?: throw Exception("Geocoding network error")
 
                 val results = geoJson.optJSONArray("results")
@@ -48,11 +48,14 @@ object WeatherRepository {
                 val locationObj = results.getJSONObject(0)
                 val lat = locationObj.getDouble("latitude")
                 val lon = locationObj.getDouble("longitude")
-                val cityName = locationObj.optString("name", cityQuery)
-                val country = locationObj.optString("country", "")
+                val rawName = locationObj.optString("name", cityQuery)
+                val rawCountry = locationObj.optString("country", "")
+
+                // Normalize Bulgarian City & Country Names
+                val (cityName, countryName) = localizeCityAndCountry(cityQuery, rawName, rawCountry)
 
                 // 2. Fetch Weather Data from Open-Meteo API
-                val weatherData = fetchOpenMeteoForecast(lat, lon, cityName, country)
+                val weatherData = fetchOpenMeteoForecast(lat, lon, cityName, countryName)
 
                 mainHandler.post {
                     callback.onSuccess(weatherData)
@@ -86,7 +89,8 @@ object WeatherRepository {
                     Log.w("WeatherRepository", "Android Geocoder failed, using fallback coordinates name", e)
                 }
 
-                val weatherData = fetchOpenMeteoForecast(lat, lon, cityName, countryName)
+                val (finalCity, finalCountry) = localizeCityAndCountry(cityName, cityName, countryName)
+                val weatherData = fetchOpenMeteoForecast(lat, lon, finalCity, finalCountry)
 
                 mainHandler.post {
                     callback.onSuccess(weatherData)
@@ -99,6 +103,36 @@ object WeatherRepository {
                 }
             }
         }
+    }
+
+    private fun localizeCityAndCountry(query: String, name: String, country: String): Pair<String, String> {
+        val qLower = query.lowercase(Locale.ROOT)
+        val nameLower = name.lowercase(Locale.ROOT)
+
+        var bulgarianCity = when {
+            qLower.contains("varna") || nameLower.contains("varna") || qLower.contains("варна") -> "Варна"
+            qLower.contains("sofia") || nameLower.contains("sofia") || qLower.contains("софия") -> "София"
+            qLower.contains("plovdiv") || nameLower.contains("plovdiv") || qLower.contains("пловдив") -> "Пловдив"
+            qLower.contains("burgas") || nameLower.contains("burgas") || qLower.contains("бургас") -> "Бургас"
+            qLower.contains("shabla") || nameLower.contains("shabla") || qLower.contains("шабла") -> "Шабла"
+            else -> name
+        }
+
+        var bulgarianCountry = when (country.trim()) {
+            "Bulgaria", "BG" -> "България"
+            "United States", "US", "USA" -> "САЩ"
+            "United Kingdom", "UK", "GB" -> "Обединено кралство"
+            "Germany", "DE" -> "Германия"
+            "France", "FR" -> "Франция"
+            "Italy", "IT" -> "Италия"
+            "Spain", "ES" -> "Испания"
+            "Greece", "GR" -> "Гърция"
+            "Turkey", "TR" -> "Турция"
+            "Romania", "RO" -> "Румъния"
+            else -> country
+        }
+
+        return Pair(bulgarianCity, bulgarianCountry)
     }
 
     private fun fetchOpenMeteoForecast(lat: Double, lon: Double, cityName: String, country: String): WeatherData {
