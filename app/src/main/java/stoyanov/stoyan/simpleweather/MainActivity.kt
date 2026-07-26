@@ -24,6 +24,8 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val LOCATION_PERMISSION_REQUEST_CODE = 1001
+        private const val KEY_CURRENT_CITY = "KEY_CURRENT_CITY"
+        private const val KEY_IS_CELSIUS = "KEY_IS_CELSIUS"
     }
 
     private lateinit var rootLayout: ScrollView
@@ -52,6 +54,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var chipBurgas: Button
 
     private var currentWeatherData: WeatherData? = null
+    private var currentCityQuery: String? = null
     private var isCelsius = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -62,8 +65,24 @@ class MainActivity : AppCompatActivity() {
         initViews()
         setupListeners()
 
-        // Check GPS location or fallback to Sofia
-        checkLocationAndLoadWeather()
+        // Restore state if rotated or recreated
+        if (savedInstanceState != null) {
+            currentCityQuery = savedInstanceState.getString(KEY_CURRENT_CITY)
+            isCelsius = savedInstanceState.getBoolean(KEY_IS_CELSIUS, true)
+        }
+
+        if (!currentCityQuery.isNullOrEmpty()) {
+            loadWeather(currentCityQuery!!)
+        } else {
+            // Initial launch: check GPS location or fallback to Sofia
+            checkLocationAndLoadWeather()
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(KEY_CURRENT_CITY, currentCityQuery)
+        outState.putBoolean(KEY_IS_CELSIUS, isCelsius)
     }
 
     private fun initViews() {
@@ -155,6 +174,7 @@ class MainActivity : AppCompatActivity() {
                         override fun onSuccess(data: WeatherData) {
                             progressBar.visibility = View.GONE
                             currentWeatherData = data
+                            currentCityQuery = data.city
                             renderWeatherUI(data)
                         }
 
@@ -177,6 +197,7 @@ class MainActivity : AppCompatActivity() {
                                 override fun onSuccess(data: WeatherData) {
                                     progressBar.visibility = View.GONE
                                     currentWeatherData = data
+                                    currentCityQuery = data.city
                                     renderWeatherUI(data)
                                 }
 
@@ -235,6 +256,7 @@ class MainActivity : AppCompatActivity() {
             override fun onSuccess(data: WeatherData) {
                 progressBar.visibility = View.GONE
                 currentWeatherData = data
+                currentCityQuery = city
                 renderWeatherUI(data)
             }
 
