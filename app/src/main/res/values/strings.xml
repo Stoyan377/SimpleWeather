@@ -1,0 +1,17 @@
+<resources>
+    <string name="app_name">Simple Weather</string>
+    <string name="search_hint">Search city worldwide...</string>
+    <string name="btn_search">Search</string>
+    <string name="unit_celsius">°C</string>
+    <string name="unit_fahrenheit">°F</string>
+    <string name="label_feels_like">Feels like %s</string>
+    <string name="label_humidity">Humidity</string>
+    <string name="label_pressure">Pressure</string>
+    <string name="label_wind">Wind</string>
+    <string name="label_sunrise">Sunrise</string>
+    <string name="label_sunset">Sunset</string>
+    <string name="chip_sofia">София</string>
+    <string name="chip_plovdiv">Пловдив</string>
+    <string name="chip_varna">Варна</string>
+    <string name="chip_burgas">Бургас</string>
+</resources>
