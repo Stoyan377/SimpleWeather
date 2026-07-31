@@ -10,6 +10,56 @@ enum class WeatherCondition {
     ATMOSPHERE // Mist, Fog, Haze, etc.
 }
 
+data class HourlyItem(
+    val time: String,
+    val tempC: Double,
+    val condition: WeatherCondition,
+    val description: String
+) {
+    fun getTemp(isCelsius: Boolean): String {
+        val temp = if (isCelsius) tempC else (tempC * 9 / 5) + 32
+        return String.format("%.0f°", temp)
+    }
+
+    fun getEmoji(): String {
+        return when (condition) {
+            WeatherCondition.CLEAR_DAY -> "☀️"
+            WeatherCondition.CLEAR_NIGHT -> "🌙"
+            WeatherCondition.CLOUDS -> "☁️"
+            WeatherCondition.RAIN -> "🌧️"
+            WeatherCondition.SNOW -> "❄️"
+            WeatherCondition.THUNDERSTORM -> "⛈️"
+            WeatherCondition.ATMOSPHERE -> "🌫️"
+        }
+    }
+}
+
+data class DailyItem(
+    val dayOfWeek: String,
+    val tempMinC: Double,
+    val tempMaxC: Double,
+    val condition: WeatherCondition,
+    val description: String
+) {
+    fun getMinMax(isCelsius: Boolean): String {
+        val min = if (isCelsius) tempMinC else (tempMinC * 9 / 5) + 32
+        val max = if (isCelsius) tempMaxC else (tempMaxC * 9 / 5) + 32
+        return String.format("%.0f° / %.0f°", min, max)
+    }
+
+    fun getEmoji(): String {
+        return when (condition) {
+            WeatherCondition.CLEAR_DAY -> "☀️"
+            WeatherCondition.CLEAR_NIGHT -> "🌙"
+            WeatherCondition.CLOUDS -> "☁️"
+            WeatherCondition.RAIN -> "🌧️"
+            WeatherCondition.SNOW -> "❄️"
+            WeatherCondition.THUNDERSTORM -> "⛈️"
+            WeatherCondition.ATMOSPHERE -> "🌫️"
+        }
+    }
+}
+
 data class WeatherData(
     val city: String,
     val country: String,
@@ -25,7 +75,9 @@ data class WeatherData(
     val condition: WeatherCondition,
     val sunrise: String,
     val sunset: String,
-    val updatedOn: String
+    val updatedOn: String,
+    val hourlyForecast: List<HourlyItem> = emptyList(),
+    val dailyForecast: List<DailyItem> = emptyList()
 ) {
     fun getTemp(isCelsius: Boolean): String {
         val temp = if (isCelsius) tempC else (tempC * 9 / 5) + 32

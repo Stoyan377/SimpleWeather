@@ -12,6 +12,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.text.DateFormat
+import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
@@ -109,7 +110,7 @@ object WeatherRepository {
         val qLower = query.lowercase(Locale.ROOT)
         val nameLower = name.lowercase(Locale.ROOT)
 
-        var bulgarianCity = when {
+        val bulgarianCity = when {
             qLower.contains("varna") || nameLower.contains("varna") || qLower.contains("варна") -> "Варна"
             qLower.contains("sofia") || nameLower.contains("sofia") || qLower.contains("софия") -> "София"
             qLower.contains("plovdiv") || nameLower.contains("plovdiv") || qLower.contains("пловдив") -> "Пловдив"
@@ -118,7 +119,7 @@ object WeatherRepository {
             else -> name
         }
 
-        var bulgarianCountry = when (country.trim()) {
+        val bulgarianCountry = when (country.trim()) {
             "Bulgaria", "BG" -> "България"
             "United States", "US", "USA" -> "САЩ"
             "United Kingdom", "UK", "GB" -> "Обединено кралство"
@@ -138,8 +139,8 @@ object WeatherRepository {
     private fun fetchOpenMeteoForecast(lat: Double, lon: Double, cityName: String, country: String): WeatherData {
         val forecastUrlString = "$FORECAST_URL?latitude=$lat&longitude=$lon" +
                 "&current_weather=true" +
-                "&hourly=relativehumidity_2m,surface_pressure,apparent_temperature" +
-                "&daily=sunrise,sunset,temperature_2m_max,temperature_2m_min" +
+                "&hourly=temperature_2m,relativehumidity_2m,surface_pressure,apparent_temperature,weathercode" +
+                "&daily=sunrise,sunset,temperature_2m_max,temperature_2m_min,weathercode" +
                 "&timezone=auto"
 
         val weatherJson = httpGet(forecastUrlString) ?: throw Exception("Forecast network error")
@@ -210,6 +211,48 @@ object WeatherRepository {
 
         val (description, condition) = mapWeatherCode(weatherCode, isDay)
 
+        // Parse Hourly Forecast
+        val hourlyList = mutableListOf<HourlyItem>()
+        if (hourly != null) {
+            val timeArr = hourly.optJSONArray("time")
+            val tempArr = hourly.optJSONArray("temperature_2m")
+            val codeArr = hourly.optJSONArray("weathercode")
+
+            if (timeArr != null && tempArr != null && codeArr != null) {
+                val count = Math.min(24, timeArr.length())
+                for (i in 0 until count) {
+                    val isoTime = timeArr.getString(i)
+                    val formattedTime = formatIsoTime(isoTime)
+                    val hTemp = tempArr.getDouble(i)
+                    val hCode = codeArr.getInt(i)
+                    val (hDesc, hCond) = mapWeatherCode(hCode, true)
+                    hourlyList.add(HourlyItem(formattedTime, hTemp, hCond, hDesc))
+                }
+            }
+        }
+
+        // Parse Daily Forecast
+        val dailyList = mutableListOf<DailyItem>()
+        if (daily != null) {
+            val timeArr = daily.optJSONArray("time")
+            val maxArr = daily.optJSONArray("temperature_2m_max")
+            val minArr = daily.optJSONArray("temperature_2m_min")
+            val codeArr = daily.optJSONArray("weathercode")
+
+            if (timeArr != null && maxArr != null && minArr != null && codeArr != null) {
+                val count = timeArr.length()
+                for (i in 0 until count) {
+                    val rawDate = timeArr.getString(i)
+                    val dayLabel = formatDailyLabel(rawDate, i)
+                    val dMax = maxArr.getDouble(i)
+                    val dMin = minArr.getDouble(i)
+                    val dCode = codeArr.getInt(i)
+                    val (dDesc, dCond) = mapWeatherCode(dCode, true)
+                    dailyList.add(DailyItem(dayLabel, dMin, dMax, dCond, dDesc))
+                }
+            }
+        }
+
         return WeatherData(
             city = city,
             country = country,
@@ -225,8 +268,28 @@ object WeatherRepository {
             condition = condition,
             sunrise = sunriseStr,
             sunset = sunsetStr,
-            updatedOn = updatedOnStr
+            updatedOn = updatedOnStr,
+            hourlyForecast = hourlyList,
+            dailyForecast = dailyList
         )
+    }
+
+    private fun formatDailyLabel(rawDate: String, index: Int): String {
+        if (index == 0) return "Днес"
+        if (index == 1) return "Утре"
+        return try {
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            val date = sdf.parse(rawDate)
+            if (date != null) {
+                val outSdf = SimpleDateFormat("EEE (dd.MM)", Locale("bg"))
+                val formatted = outSdf.format(date)
+                formatted.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale("bg")) else it.toString() }
+            } else {
+                rawDate
+            }
+        } catch (e: Exception) {
+            rawDate
+        }
     }
 
     private fun formatIsoTime(isoString: String?): String {
