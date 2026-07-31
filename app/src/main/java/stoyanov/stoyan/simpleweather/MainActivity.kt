@@ -4,13 +4,15 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
+import android.graphics.Rect
+import android.graphics.Typeface
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
 import android.os.Looper
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
@@ -60,6 +62,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var chipPlovdiv: Button
     private lateinit var chipVarna: Button
     private lateinit var chipBurgas: Button
+    private lateinit var chipShabla: Button
 
     private var currentWeatherData: WeatherData? = null
     private var currentCityQuery: String? = null
@@ -120,6 +123,7 @@ class MainActivity : AppCompatActivity() {
         chipPlovdiv = findViewById(R.id.chip_plovdiv)
         chipVarna = findViewById(R.id.chip_varna)
         chipBurgas = findViewById(R.id.chip_burgas)
+        chipShabla = findViewById(R.id.chip_shabla)
     }
 
     private fun setupListeners() {
@@ -140,6 +144,7 @@ class MainActivity : AppCompatActivity() {
         chipPlovdiv.setOnClickListener { loadWeather("Plovdiv") }
         chipVarna.setOnClickListener { loadWeather("Varna") }
         chipBurgas.setOnClickListener { loadWeather("Burgas") }
+        chipShabla.setOnClickListener { loadWeather("Shabla") }
 
         btnUnitToggle.setOnClickListener {
             isCelsius = !isCelsius
@@ -153,6 +158,23 @@ class MainActivity : AppCompatActivity() {
         btnDailyForecast.setOnClickListener {
             currentWeatherData?.let { showDailyForecastDialog(it) }
         }
+    }
+
+    // Dismiss soft keyboard when tapping anywhere outside EditText
+    override fun dispatchTouchEvent(ev: MotionEvent?): Boolean {
+        if (ev?.action == MotionEvent.ACTION_DOWN) {
+            val v = currentFocus
+            if (v is EditText) {
+                val outRect = Rect()
+                v.getGlobalVisibleRect(outRect)
+                if (!outRect.contains(ev.rawX.toInt(), ev.rawY.toInt())) {
+                    v.clearFocus()
+                    val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                    imm?.hideSoftInputFromWindow(v.windowToken, 0)
+                }
+            }
+        }
+        return super.dispatchTouchEvent(ev)
     }
 
     private fun checkLocationAndLoadWeather() {
@@ -307,68 +329,64 @@ class MainActivity : AppCompatActivity() {
 
     private fun showHourlyForecastDialog(data: WeatherData) {
         val dialog = BottomSheetDialog(this)
-        val dialogView = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(48, 48, 48, 48)
-            setBackgroundResource(R.drawable.glass_card_background)
-        }
+        val dialogView = layoutInflater.inflate(R.layout.dialog_forecast, null)
+        dialog.setContentView(dialogView)
 
-        val titleTv = TextView(this).apply {
-            text = "🕒 Почасова прогноза — ${data.city}"
-            setTextColor(Color.WHITE)
-            textSize = 18f
-            setPadding(0, 0, 0, 32)
-            gravity = Gravity.CENTER_HORIZONTAL
-        }
-        dialogView.addView(titleTv)
+        val bottomSheet = dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+        bottomSheet?.setBackgroundColor(Color.TRANSPARENT)
 
-        val scrollView = ScrollView(this)
-        val itemsContainer = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
+        val tvTitle = dialogView.findViewById<TextView>(R.id.tv_dialog_title)
+        val btnClose = dialogView.findViewById<TextView>(R.id.btn_dialog_close)
+        val container = dialogView.findViewById<LinearLayout>(R.id.ll_forecast_items)
+
+        tvTitle.text = "🕒 Почасова прогноза — ${data.city}"
+        btnClose.setOnClickListener { dialog.dismiss() }
 
         if (data.hourlyForecast.isEmpty()) {
             val emptyTv = TextView(this).apply {
                 text = "Няма налична почасова прогноза."
-                setTextColor(Color.LTGRAY)
+                setTextColor(Color.parseColor("#94A3B8"))
+                textSize = 14f
                 gravity = Gravity.CENTER
-                setPadding(0, 32, 0, 32)
+                setPadding(0, 48, 0, 48)
             }
-            itemsContainer.addView(emptyTv)
+            container.addView(emptyTv)
         } else {
             for (item in data.hourlyForecast) {
                 val rowLayout = LinearLayout(this).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
-                    setPadding(16, 20, 16, 20)
-                    weightSum = 4f
+                    setPadding(20, 24, 20, 24)
+                    weightSum = 4.2f
                 }
 
                 val timeTv = TextView(this).apply {
                     text = item.time
                     setTextColor(Color.WHITE)
                     textSize = 15f
+                    typeface = Typeface.DEFAULT_BOLD
                     layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
                 }
 
                 val emojiTv = TextView(this).apply {
                     text = item.getEmoji()
-                    textSize = 22f
+                    textSize = 24f
                     layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.7f)
                 }
 
                 val tempTv = TextView(this).apply {
                     text = item.getTemp(isCelsius)
-                    setTextColor(Color.WHITE)
+                    setTextColor(Color.parseColor("#38BDF8"))
                     textSize = 16f
-                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.8f)
+                    typeface = Typeface.DEFAULT_BOLD
+                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.9f)
                 }
 
                 val descTv = TextView(this).apply {
                     text = item.description
-                    setTextColor(Color.LTGRAY)
+                    setTextColor(Color.parseColor("#E2E8F0"))
                     textSize = 14f
-                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.5f)
+                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.6f)
                 }
 
                 rowLayout.addView(timeTv)
@@ -376,61 +394,49 @@ class MainActivity : AppCompatActivity() {
                 rowLayout.addView(tempTv)
                 rowLayout.addView(descTv)
 
-                itemsContainer.addView(rowLayout)
+                container.addView(rowLayout)
 
-                // Divider line
                 val divider = View(this).apply {
                     layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 1)
-                    setBackgroundColor(Color.parseColor("#30FFFFFF"))
+                    setBackgroundColor(Color.parseColor("#20FFFFFF"))
                 }
-                itemsContainer.addView(divider)
+                container.addView(divider)
             }
         }
 
-        scrollView.addView(itemsContainer)
-        dialogView.addView(scrollView)
-
-        dialog.setContentView(dialogView)
-        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         dialog.show()
     }
 
     private fun showDailyForecastDialog(data: WeatherData) {
         val dialog = BottomSheetDialog(this)
-        val dialogView = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(48, 48, 48, 48)
-            setBackgroundResource(R.drawable.glass_card_background)
-        }
+        val dialogView = layoutInflater.inflate(R.layout.dialog_forecast, null)
+        dialog.setContentView(dialogView)
 
-        val titleTv = TextView(this).apply {
-            text = "📅 7-дневна прогноза — ${data.city}"
-            setTextColor(Color.WHITE)
-            textSize = 18f
-            setPadding(0, 0, 0, 32)
-            gravity = Gravity.CENTER_HORIZONTAL
-        }
-        dialogView.addView(titleTv)
+        val bottomSheet = dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+        bottomSheet?.setBackgroundColor(Color.TRANSPARENT)
 
-        val scrollView = ScrollView(this)
-        val itemsContainer = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
+        val tvTitle = dialogView.findViewById<TextView>(R.id.tv_dialog_title)
+        val btnClose = dialogView.findViewById<TextView>(R.id.btn_dialog_close)
+        val container = dialogView.findViewById<LinearLayout>(R.id.ll_forecast_items)
+
+        tvTitle.text = "📅 7-дневна прогноза — ${data.city}"
+        btnClose.setOnClickListener { dialog.dismiss() }
 
         if (data.dailyForecast.isEmpty()) {
             val emptyTv = TextView(this).apply {
                 text = "Няма налична 7-дневна прогноза."
-                setTextColor(Color.LTGRAY)
+                setTextColor(Color.parseColor("#94A3B8"))
+                textSize = 14f
                 gravity = Gravity.CENTER
-                setPadding(0, 32, 0, 32)
+                setPadding(0, 48, 0, 48)
             }
-            itemsContainer.addView(emptyTv)
+            container.addView(emptyTv)
         } else {
             for (item in data.dailyForecast) {
                 val rowLayout = LinearLayout(this).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
-                    setPadding(16, 24, 16, 24)
+                    setPadding(20, 24, 20, 24)
                     weightSum = 4f
                 }
 
@@ -438,26 +444,28 @@ class MainActivity : AppCompatActivity() {
                     text = item.dayOfWeek
                     setTextColor(Color.WHITE)
                     textSize = 15f
+                    typeface = Typeface.DEFAULT_BOLD
                     layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.2f)
                 }
 
                 val emojiTv = TextView(this).apply {
                     text = item.getEmoji()
-                    textSize = 22f
+                    textSize = 24f
                     layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.6f)
                 }
 
                 val descTv = TextView(this).apply {
                     text = item.description
-                    setTextColor(Color.LTGRAY)
+                    setTextColor(Color.parseColor("#E2E8F0"))
                     textSize = 14f
                     layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.2f)
                 }
 
                 val tempTv = TextView(this).apply {
                     text = item.getMinMax(isCelsius)
-                    setTextColor(Color.WHITE)
+                    setTextColor(Color.parseColor("#38BDF8"))
                     textSize = 15f
+                    typeface = Typeface.DEFAULT_BOLD
                     gravity = Gravity.END
                     layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
                 }
@@ -467,22 +475,16 @@ class MainActivity : AppCompatActivity() {
                 rowLayout.addView(descTv)
                 rowLayout.addView(tempTv)
 
-                itemsContainer.addView(rowLayout)
+                container.addView(rowLayout)
 
-                // Divider line
                 val divider = View(this).apply {
                     layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 1)
-                    setBackgroundColor(Color.parseColor("#30FFFFFF"))
+                    setBackgroundColor(Color.parseColor("#20FFFFFF"))
                 }
-                itemsContainer.addView(divider)
+                container.addView(divider)
             }
         }
 
-        scrollView.addView(itemsContainer)
-        dialogView.addView(scrollView)
-
-        dialog.setContentView(dialogView)
-        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         dialog.show()
     }
 

@@ -106,10 +106,23 @@
                     style="?android:attr/borderlessButtonStyle"
                     android:layout_width="wrap_content"
                     android:layout_height="32dp"
+                    android:layout_marginEnd="8dp"
                     android:background="@drawable/chip_background"
                     android:minWidth="0dp"
                     android:paddingHorizontal="16dp"
                     android:text="@string/chip_burgas"
+                    android:textColor="#FFFFFF"
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/chip_shabla"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:background="@drawable/chip_background"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="16dp"
+                    android:text="@string/chip_shabla"
                     android:textColor="#FFFFFF"
                     android:textSize="12sp" />
             </LinearLayout>
